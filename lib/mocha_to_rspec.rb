@@ -12,6 +12,7 @@ require "rubocop/cop/mocha_to_rspec/stubs_with_args"
 require "rubocop/cop/mocha_to_rspec/stubs_with_hash"
 require "rubocop/cop/mocha_to_rspec/stubs_with_no_args"
 require "rubocop/cop/mocha_to_rspec/stubs_with_no_return"
+require "rubocop/cop/mocha_to_rspec/stubs_with_chain_with_args"
 require "active_support/core_ext/string/inflections" # for `camelize`
 
 module MochaToRSpec
