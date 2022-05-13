@@ -23,7 +23,11 @@ module RuboCop
         end
 
         def extract_withs(x_array, output_arr)
-          output_arr << x_array.last
+          if x_array.last == :with
+            output_arr << OpenStruct.new(source: 'no_args')
+          else
+            output_arr << x_array[2..-1]
+          end
 
           if x_array.first.source.include?('.with')
             extract_withs(x_array.first.to_a, output_arr)
@@ -32,12 +36,20 @@ module RuboCop
           end
         end
 
+        def format(args)
+          if args.kind_of?(Array)
+            ".with(#{args.map(&:source).join(', ')})"
+          else
+            ".with(#{args.source})"
+          end
+        end
+
         def autocorrect(node)
           lambda do |corrector|
             node_without_returns, returns, ret_val = *node
             withs = []
             obj_stubs_x = extract_withs(node_without_returns.to_a, withs)
-            withs = withs.reverse.map { |args| ".with(#{args.source.empty? ? 'no_args' : args.source})" }.join('')
+            withs = withs.reverse.map { |args| format(args) }.join('')
 
             # obj_stubs_x_with_y, returns, ret_val = *node
             # obj_stubs_x, _with, *args = *obj_stubs_x_with_y
