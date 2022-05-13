@@ -2,15 +2,14 @@ module RuboCop
   module Cop
     module MochaToRSpec
       class StubsWithChainWithArgs < Cop
-        # TODO: Use seperate messages for allow/expect.
-        MSG = "Use `allow/expect(object).to receive(...).with(...)` (rspec-mocks) instead of `object.stubs/expects(...).with(...)` (Mocha)".freeze
+        MSG = "expect and stub chains autocorrect".freeze
 
         def_node_matcher :candidate?, <<-CODE
           $(...)
         CODE
 
         def x_candidate?(node)
-          node.source.include?('expects_chain') && !node.source.scan('.with').count.zero? && node.source.include?('.returns')
+          (node.source.include?('expects_chain') || node.source.include?('stubs_chain')) && !node.source.scan('.with').count.zero? && node.source.include?('.returns')
         end
 
         def on_send(node)
@@ -23,30 +22,31 @@ module RuboCop
           end
         end
 
-        def extract_withs(x, arr = [])
-          arr << x.to_a.last
+        def extract_withs(x_array, output_arr)
+          output_arr << x_array.last
 
-          if x.to_a.first.source.include?('.with')
-            extract_withs(x.to_a.first, arr)
+          if x_array.first.source.include?('.with')
+            extract_withs(x_array.first.to_a, output_arr)
           else
-            arr
+            x_array.first
           end
         end
 
         def autocorrect(node)
           lambda do |corrector|
             node_without_returns, returns, ret_val = *node
+            withs = []
+            obj_stubs_x = extract_withs(node_without_returns.to_a, withs)
+            withs = withs.reverse.map { |args| ".with(#{args.source.empty? ? 'no_args' : args.source})" }.join('')
 
-            withs = extract_withs(node_without_returns).reverse.map { |arg| ".with(#{arg.source})" }.join('')
-
-            obj_stubs_x_with_y, returns, ret_val = *node
-            obj_stubs_x, _with, *args = *obj_stubs_x_with_y
+            # obj_stubs_x_with_y, returns, ret_val = *node
+            # obj_stubs_x, _with, *args = *obj_stubs_x_with_y
+            # args_list = args.map(&:source).join(", ")
 
             subject, variant, *method_names = *obj_stubs_x
-            args_list = args.map(&:source).join(", ")
 
             allow_or_expect = case variant
-                              when :stubs
+                              when :stubs, :stubs_chain
                                 "allow"
                               when :expects, :expects_chain
                                 "expect"
@@ -54,7 +54,7 @@ module RuboCop
                                 raise "Got #{variant}"
                               end
 
-            with_args = args_list.empty? ? 'no_args' : args_list
+            # with_args = args_list.empty? ? 'no_args' : args_list
 
             # expect(Kai::PaymentInvoices::SurchargeInvoiceBuilder).to receive_message_chain(:new, :build).with(
             #   user, pay_plan: pay_plan, surcharge_in_cents: surcharge_in_cents
@@ -62,7 +62,7 @@ module RuboCop
 
             # Trzeba zrobić poprawki żeby mieć ret_val i method_names + dodawać no_args
 
-            if variant == :expects_chain
+            if variant == :expects_chain || variant == :stubs_chain
               replacement = "#{allow_or_expect}(#{subject.source}).to receive_message_chain(#{method_names.map(&:source).join(', ')})#{withs}.and_return(#{ret_val.source})"
             else
               replacement = "#{allow_or_expect}(#{subject.source}).to receive(#{method_names.first.source}).with(#{with_args}).and_return(#{ret_val.source})"
